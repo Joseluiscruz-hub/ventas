@@ -1,9 +1,10 @@
 import React, { useState, useEffect, createContext, useContext, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   ShoppingCart, LayoutDashboard, PackageSearch, Receipt, LogOut, 
   Plus, Search, Trash2, Edit, Barcode, CreditCard, Banknote,
   TrendingUp, AlertCircle, CheckCircle2, Lock, UserCog, ShieldCheck,
-  History, Save, X, Store as StoreIcon
+  History, Save, X, Store as StoreIcon, Sun, Moon, Upload
 } from 'lucide-react';
 
 // ============================================================================
@@ -149,6 +150,12 @@ const BackendAPI = {
     throw new Error('Credenciales inválidas');
   },
 
+  async deleteProduct(context: { tenantId: string }, productId: string): Promise<void> {
+    await delay(300);
+    DB.products = DB.products.filter(p => !(p.id === productId && p.tenantId === context.tenantId));
+    DB.storeProducts = DB.storeProducts.filter(sp => !(sp.productId === productId && sp.tenantId === context.tenantId));
+  },
+
   async getStoreProducts(context: { tenantId: string, storeId: string }): Promise<ProductView[]> {
     await delay(200);
     const tProducts = DB.products.filter(p => p.tenantId === context.tenantId);
@@ -233,6 +240,14 @@ const BackendAPI = {
       }
 
       return { ...DB.products[indexP], stock: productData.stock, minStock: productData.minStock };
+    }
+  },
+
+  async saveProductsBulk(context: { tenantId: string, storeId: string, userId: string }, productsData: Array<Omit<ProductView, 'id' | 'tenantId'>>): Promise<void> {
+    await delay(500);
+    for (const data of productsData) {
+      // Small delay per item to avoid blocking entirely or just await the sequential wrapper
+      await this.saveProduct(context, data);
     }
   },
 
@@ -343,11 +358,44 @@ function useAuth() {
 }
 
 // ============================================================================
+// 3.5 THEME CONTEXT
+// ============================================================================
+
+interface ThemeContextType {
+  isDark: boolean;
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | null>(null);
+
+function useThemeProvider() {
+  // Always start in dark mode as requested for "Elegant Dark"
+  const [isDark, setIsDark] = useState(true);
+  
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
+
+  return { isDark, toggleTheme: () => setIsDark(!isDark) };
+}
+
+function useAppTheme() {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error('useAppTheme must be used within ThemeProvider');
+  return ctx;
+}
+
+// ============================================================================
 // 4. APP COMPONENT
 // ============================================================================
 
 export default function App() {
   const [session, setSession] = useState<{ user: User, tenant: Tenant, store: Store, token: string } | null>(null);
+  const themeData = useThemeProvider();
   
   const login = async (username: string, pin: string) => {
     const data = await BackendAPI.login(username, pin);
@@ -374,13 +422,21 @@ export default function App() {
   };
 
   if (!session) {
-    return <AuthContext.Provider value={authValue}><LoginScreen /></AuthContext.Provider>;
+    return (
+      <ThemeContext.Provider value={themeData}>
+        <AuthContext.Provider value={authValue}>
+          <LoginScreen />
+        </AuthContext.Provider>
+      </ThemeContext.Provider>
+    );
   }
 
   return (
-    <AuthContext.Provider value={authValue}>
-      <MainLayout />
-    </AuthContext.Provider>
+    <ThemeContext.Provider value={themeData}>
+      <AuthContext.Provider value={authValue}>
+        <MainLayout />
+      </AuthContext.Provider>
+    </ThemeContext.Provider>
   );
 }
 
@@ -395,49 +451,49 @@ function MainLayout() {
   const auditEnabled = hasFeature(tenant, 'AUDIT');
 
   return (
-    <div className="flex h-screen bg-[#0F1115] font-sans text-[#E2E8F0] overflow-hidden">
-      <aside className="w-64 bg-[#111419] border-r border-[#2D3139] flex flex-col transition-all duration-300">
-        <div className="p-6 flex items-center gap-3 border-b border-[#2D3139] bg-[#16191E]">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg border border-white/10 shrink-0">
+    <div className="flex h-screen bg-slate-50 dark:bg-[#0F1115] font-sans text-slate-900 dark:text-[#E2E8F0] overflow-hidden transition-colors">
+      <aside className="w-64 bg-slate-100 dark:bg-[#111419] border-r border-slate-200 dark:border-[#2D3139] flex flex-col transition-all duration-300">
+        <div className="p-6 flex items-center gap-3 border-b border-slate-200 dark:border-[#2D3139] bg-white dark:bg-[#16191E]">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg border border-blue-600/10 dark:border-white/10 shrink-0">
             N
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight leading-tight">NEXUS <span className="font-light text-slate-400 text-sm italic">v2.0</span></h1>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight">NEXUS <span className="font-light text-slate-500 dark:text-slate-400 text-sm italic">v2.0</span></h1>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase font-bold truncate max-w-[120px]">Plan {tenant?.plan}</p>
+              <p className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase font-bold truncate max-w-[120px]">Plan {tenant?.plan}</p>
             </div>
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-[#16191E] border-b border-[#2D3139] space-y-3 flex justify-between flex-col">
+        <div className="px-6 py-4 bg-white dark:bg-[#16191E] border-b border-slate-200 dark:border-[#2D3139] space-y-3 flex justify-between flex-col">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-800 border border-white/10 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-800 border border-transparent dark:border-white/10 flex items-center justify-center shrink-0 shadow-sm">
               {user?.role === 'ADMIN' ? <ShieldCheck size={20} className="text-white"/> : <UserCog size={20} className="text-white"/>}
             </div>
             <div className="overflow-hidden">
-              <p className="text-sm font-bold text-white truncate">{user?.name}</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{user?.name}</p>
               <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">{user?.role}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-400 bg-black/20 p-2 border border-white/5 rounded-lg">
-            <StoreIcon size={14} className="text-blue-500 shrink-0" />
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-black/20 p-2 border border-slate-200 dark:border-white/5 rounded-lg">
+            <StoreIcon size={14} className="text-blue-600 dark:text-blue-500 shrink-0" />
             <span className="truncate">{store?.name}</span>
           </div>
         </div>
 
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto flex flex-col gap-1">
-          <div className="px-4 py-2 text-[10px] text-slate-600 uppercase font-bold tracking-[0.2em] mb-1">Operaciones</div>
+          <div className="px-4 py-2 text-[10px] text-slate-400 dark:text-slate-600 uppercase font-bold tracking-[0.2em] mb-1">Operaciones</div>
           <NavItem icon={<ShoppingCart size={20} />} label="Terminal de Caja" active={currentView === 'pos'} onClick={() => setCurrentView('pos')} />
           
           {hasPermission(['ADMIN', 'MANAGER']) && (
             <>
-              <div className="px-4 py-2 text-[10px] text-slate-600 uppercase font-bold tracking-[0.2em] mt-4 mb-1">Management</div>
+              <div className="px-4 py-2 text-[10px] text-slate-400 dark:text-slate-600 uppercase font-bold tracking-[0.2em] mt-4 mb-1">Management</div>
               <NavItem icon={<LayoutDashboard size={20} />} label="Panel de Control" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />
               <NavItem icon={<PackageSearch size={20} />} label="Inventario y Stock" active={currentView === 'inventory'} onClick={() => setCurrentView('inventory')} />
               
               {auditEnabled && (
                 <>
-                  <div className="px-4 py-2 text-[10px] text-slate-600 uppercase font-bold tracking-[0.2em] mt-4 mb-1">Auditoría</div>
+                  <div className="px-4 py-2 text-[10px] text-slate-400 dark:text-slate-600 uppercase font-bold tracking-[0.2em] mt-4 mb-1">Auditoría</div>
                   <NavItem icon={<Receipt size={20} />} label="Registro de Ventas" active={currentView === 'sales'} onClick={() => setCurrentView('sales')} />
                   <NavItem icon={<History size={20} />} label="Auditoría Movimientos" active={currentView === 'movements'} onClick={() => setCurrentView('movements')} />
                 </>
@@ -446,11 +502,12 @@ function MainLayout() {
           )}
         </nav>
 
-        <div className="p-4 border-t border-[#2D3139]">
-          <button onClick={logout} className="flex items-center gap-3 px-4 py-3 w-full rounded-lg hover:bg-white/5 text-slate-400 transition-colors font-medium">
+        <div className="p-4 border-t border-slate-200 dark:border-[#2D3139] flex gap-2">
+          <button onClick={logout} className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg hover:bg-slate-200 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 transition-colors font-medium">
             <LogOut size={20} />
-            <span>Cerrar Sesión</span>
+            <span>Salir</span>
           </button>
+          <ThemeToggle />
         </div>
       </aside>
 
@@ -475,6 +532,7 @@ function LoginScreen() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const theme = useAppTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -489,23 +547,26 @@ function LoginScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F1115] text-[#E2E8F0] font-sans flex items-center justify-center p-4">
-      <div className="bg-[#1A1D23] p-8 rounded-3xl shadow-xl w-full max-w-md border border-[#2D3139]">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] font-sans flex items-center justify-center p-4 transition-colors">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+      <div className="bg-white dark:bg-[#1A1D23] p-8 rounded-3xl shadow-xl w-full max-w-md border border-slate-200 dark:border-[#2D3139] transition-colors">
         <div className="flex flex-col items-center mb-8">
-          <div className="bg-blue-600 text-white p-4 rounded-2xl mb-4 shadow-lg shrink-0 border border-white/10">
+          <div className="bg-blue-600 text-white p-4 rounded-2xl mb-4 shadow-lg shrink-0 border border-blue-600/10 dark:border-white/10">
             <Lock size={32} />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">NEXUS Auth 2.0</h1>
-          <p className="text-slate-400 text-center mt-2 text-sm max-w-xs">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">NEXUS Auth 2.0</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-center mt-2 text-sm max-w-xs">
             Ingresa credenciales.
-            <br/> <span className="font-mono text-xs text-slate-500">admin/1234 | caja1/0000</span>
+            <br/> <span className="font-mono text-xs text-slate-400 dark:text-slate-500">admin/1234 | caja1/0000</span>
           </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-5">
-          <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-3 bg-[#0F1115] border border-[#2D3139] text-[#E2E8F0] rounded-xl outline-none focus:border-blue-500 transition-colors" placeholder="Usuario" autoFocus />
-          <input type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="••••" className="w-full text-center tracking-[1em] text-2xl p-3 bg-[#0F1115] border border-[#2D3139] text-white rounded-xl outline-none focus:border-blue-500 transition-colors" maxLength={4} />
+          <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-[#E2E8F0] rounded-xl outline-none focus:border-blue-500 transition-colors" placeholder="Usuario" autoFocus />
+          <input type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="••••" className="w-full text-center tracking-[1em] text-2xl p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-xl outline-none focus:border-blue-500 transition-colors" maxLength={4} />
           {error && <p className="text-red-500 text-sm font-medium text-center">{error}</p>}
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors">{loading ? 'Verificando...' : 'Entrar'}</button>
+          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-md shadow-blue-600/20">{loading ? 'Verificando...' : 'Entrar'}</button>
         </form>
       </div>
     </div>
@@ -523,6 +584,8 @@ function POSView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [confirmSaleInfo, setConfirmSaleInfo] = useState<any>(null);
+  const [alertInfo, setAlertInfo] = useState<any>(null);
 
   useEffect(() => {
     BackendAPI.getStoreProducts(reqContext).then(setProducts);
@@ -555,23 +618,31 @@ function POSView() {
       ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.price } : item));
   };
 
-  const handleCheckout = async (paymentMethod: PaymentMethod, amountTendered: number) => {
+  const executeCheckout = async () => {
+    if (!confirmSaleInfo) return;
     setIsProcessing(true);
     try {
-      await BackendAPI.processSale(reqContext, {
+      const sale = await BackendAPI.processSale(reqContext, {
         items: cart,
-        paymentMethod,
-        amountTendered
+        paymentMethod: confirmSaleInfo.paymentMethod,
+        amountTendered: confirmSaleInfo.amountTendered
       });
       setCart([]);
       setShowPaymentModal(false);
+      setConfirmSaleInfo(null);
       const updated = await BackendAPI.getStoreProducts(reqContext);
       setProducts(updated);
+      setAlertInfo({ title: 'Venta Procesada', message: `La venta se processó correctamente. ID: ${sale.id}` });
     } catch (error: any) {
-      alert("Error: " + error.message);
+      setAlertInfo({ title: 'Error en la Venta', message: error.message });
+      setConfirmSaleInfo(null);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleCheckout = (paymentMethod: PaymentMethod, amountTendered: number) => {
+    setConfirmSaleInfo({ paymentMethod, amountTendered });
   };
 
   return (
@@ -582,11 +653,13 @@ function POSView() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col p-6 h-full overflow-hidden">
-        <div className="bg-[#1A1D23] p-4 rounded-2xl shadow-sm border border-[#2D3139] mb-6 flex items-center gap-4">
+      <div className="flex-1 flex flex-col p-6 h-full overflow-hidden bg-slate-50 dark:bg-[#0F1115] transition-colors">
+        {confirmSaleInfo && <ConfirmDialog title="Confirmar Venta" message={`¿Estás seguro de completar esta venta por ${formatCurrency(cartTotal)}?`} onConfirm={executeCheckout} onCancel={() => setConfirmSaleInfo(null)} />}
+        {alertInfo && <AlertDialog title={alertInfo.title} message={alertInfo.message} onClose={() => setAlertInfo(null)} />}
+        <div className="bg-white dark:bg-[#1A1D23] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-[#2D3139] mb-6 flex items-center gap-4 transition-colors">
           <Barcode size={24} className="text-slate-500" />
           <input
-            type="text" placeholder="Buscar..." className="flex-1 text-lg outline-none bg-transparent text-white"
+            type="text" placeholder="Buscar..." className="flex-1 text-lg outline-none bg-transparent text-slate-900 dark:text-white"
             value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} autoFocus
           />
         </div>
@@ -595,16 +668,16 @@ function POSView() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-20">
             {filteredProducts.map(product => (
               <button key={product.id} onClick={() => addToCart(product)} disabled={product.stock <= 0}
-                className={`text-left p-4 rounded-xl border transition-all ${product.stock <= 0 ? 'bg-[#1A1D23] opacity-50 border-[#2D3139]' : 'bg-[#1A1D23] border-[#2D3139] hover:border-blue-500 hover:bg-white/5'}`}>
+                className={`text-left p-4 rounded-xl border transition-all ${product.stock <= 0 ? 'bg-white dark:bg-[#1A1D23] opacity-50 border-slate-200 dark:border-[#2D3139]' : 'bg-white dark:bg-[#1A1D23] border-slate-200 dark:border-[#2D3139] hover:border-blue-500 dark:hover:border-blue-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}>
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">{product.category}</span>
                   {product.stock <= product.minStock && product.stock > 0 && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">Stock: {product.stock}</span>}
-                  {product.stock <= 0 && <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">Agotado</span>}
+                  {product.stock <= 0 && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">Agotado</span>}
                 </div>
-                <h3 className="font-bold text-sm h-10 text-white">{product.name}</h3>
+                <h3 className="font-bold text-sm h-10 text-slate-900 dark:text-white">{product.name}</h3>
                 <div className="flex justify-between items-end mt-2">
                   <span className="text-slate-500 font-mono text-[10px]">{product.barcode}</span>
-                  <span className="font-bold text-blue-400">{formatCurrency(product.price)}</span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(product.price)}</span>
                 </div>
               </button>
             ))}
@@ -612,26 +685,26 @@ function POSView() {
         </div>
       </div>
 
-      <div className="w-96 bg-[#111419] border-l border-[#2D3139] flex flex-col shadow-2xl z-10">
+      <div className="w-96 bg-slate-100 dark:bg-[#111419] border-l border-slate-200 dark:border-[#2D3139] flex flex-col shadow-2xl z-10 transition-colors">
         <div className="flex-1 p-4 space-y-3 overflow-y-auto">
           {cart.map(item => (
-            <div key={item.id} className="flex gap-3 bg-[#1A1D23] p-3 border border-[#2D3139] rounded-xl text-white">
-              <div className="flex flex-col items-center bg-black/20 rounded-lg p-1 border border-white/5">
-                <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1 hover:text-blue-400 transition-colors"><Plus size={14} /></button>
+            <div key={item.id} className="flex gap-3 bg-white dark:bg-[#1A1D23] p-3 border border-slate-200 dark:border-[#2D3139] rounded-xl text-slate-900 dark:text-white transition-colors">
+              <div className="flex flex-col items-center bg-slate-100 dark:bg-black/20 rounded-lg p-1 border border-transparent dark:border-white/5">
+                <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><Plus size={14} /></button>
                 <span className="font-bold text-sm my-1">{item.quantity}</span>
-                <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1 text-slate-400 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
               </div>
               <div className="flex-1 flex flex-col justify-center">
                 <h4 className="font-bold text-sm">{item.name}</h4>
                 <span className="text-slate-500 text-xs">{formatCurrency(item.price)} c/u</span>
               </div>
-              <div className="font-black flex items-center text-blue-400">{formatCurrency(item.subtotal)}</div>
+              <div className="font-black flex items-center text-blue-600 dark:text-blue-400">{formatCurrency(item.subtotal)}</div>
             </div>
           ))}
           {!cart.length && <div className="h-full flex items-center justify-center text-slate-500">Carrito vacío</div>}
         </div>
-        <div className="p-6 bg-[#16191E] border-t border-[#2D3139] rounded-t-xl">
-          <div className="flex justify-between text-3xl font-mono tracking-tight mb-4 text-white">
+        <div className="p-6 bg-white dark:bg-[#16191E] border-t border-slate-200 dark:border-[#2D3139] rounded-t-xl transition-colors">
+          <div className="flex justify-between text-3xl font-mono tracking-tight mb-4 text-slate-900 dark:text-white">
             <span className="font-sans">Total</span>
             <span className="text-blue-500">{formatCurrency(cartTotal)}</span>
           </div>
@@ -653,23 +726,23 @@ function PaymentModal({ total, onClose, onComplete }: any) {
   const isInvalid = method === 'CASH' && tenderNum < total;
 
   return (
-    <div className="fixed inset-0 bg-[#0F1115]/80 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-[#1A1D23] border border-[#2D3139] rounded-2xl overflow-hidden w-full max-w-md">
-        <div className="bg-[#16191E] p-6 text-white border-b border-[#2D3139] text-center"><div className="text-5xl font-mono tracking-tight text-blue-500">{formatCurrency(total)}</div></div>
-        <div className="p-6 space-y-6 text-[#E2E8F0]">
+    <div className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-[#1A1D23] border border-slate-200 dark:border-[#2D3139] rounded-2xl overflow-hidden w-full max-w-md transition-colors">
+        <div className="bg-slate-50 dark:bg-[#16191E] p-6 text-slate-900 border-b border-slate-200 dark:border-[#2D3139] text-center transition-colors"><div className="text-5xl font-mono tracking-tight text-blue-600 dark:text-blue-500">{formatCurrency(total)}</div></div>
+        <div className="p-6 space-y-6 text-slate-900 dark:text-[#E2E8F0] transition-colors">
           <div className="grid grid-cols-2 gap-4">
-            <button onClick={() => { setMethod('CASH'); setTendered(total.toString()); }} className={`p-4 border rounded-xl font-bold transition-colors ${method==='CASH'?'border-blue-500 bg-blue-600/10 text-blue-400':'border-[#2D3139] text-slate-500 hover:bg-white/5'}`}>EFECTIVO</button>
-            <button onClick={() => { setMethod('CARD'); setTendered(total.toString()); }} className={`p-4 border rounded-xl font-bold transition-colors ${method==='CARD'?'border-blue-500 bg-blue-600/10 text-blue-400':'border-[#2D3139] text-slate-500 hover:bg-white/5'}`}>TARJETA</button>
+            <button onClick={() => { setMethod('CASH'); setTendered(total.toString()); }} className={`p-4 border rounded-xl font-bold transition-colors ${method==='CASH'?'border-blue-500 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-400':'border-slate-200 dark:border-[#2D3139] text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}>EFECTIVO</button>
+            <button onClick={() => { setMethod('CARD'); setTendered(total.toString()); }} className={`p-4 border rounded-xl font-bold transition-colors ${method==='CARD'?'border-blue-500 bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-400':'border-slate-200 dark:border-[#2D3139] text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}>TARJETA</button>
           </div>
           {method === 'CASH' && (
             <div>
-              <input type="number" value={tendered} onChange={e => setTendered(e.target.value)} className="w-full text-right text-3xl font-mono p-3 bg-[#0F1115] border border-[#2D3139] rounded-xl focus:border-blue-500 outline-none text-white transition-colors" onFocus={e => e.target.select()}/>
-              <div className="flex justify-between mt-4"><span>Cambio</span><span className="font-mono text-2xl text-white">{formatCurrency(change>0?change:0)}</span></div>
+              <input type="number" value={tendered} onChange={e => setTendered(e.target.value)} className="w-full text-right text-3xl font-mono p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] rounded-xl focus:border-blue-500 outline-none text-slate-900 dark:text-white transition-colors" onFocus={e => e.target.select()}/>
+              <div className="flex justify-between mt-4"><span>Cambio</span><span className="font-mono text-2xl text-slate-900 dark:text-white">{formatCurrency(change>0?change:0)}</span></div>
             </div>
           )}
           <div className="flex gap-4">
-            <button onClick={onClose} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-colors">Cancelar</button>
-            <button onClick={() => onComplete(method, tenderNum)} disabled={isInvalid} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold disabled:bg-white/5 disabled:text-slate-600 transition-colors">Confirmar</button>
+            <button onClick={onClose} className="flex-1 py-4 bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-800 dark:text-white rounded-xl font-bold transition-colors">Cancelar</button>
+            <button onClick={() => onComplete(method, tenderNum)} disabled={isInvalid} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold disabled:bg-slate-200 dark:disabled:bg-white/5 disabled:text-slate-400 dark:disabled:text-slate-600 transition-colors">Confirmar</button>
           </div>
         </div>
       </div>
@@ -686,6 +759,9 @@ function InventoryView() {
   const [products, setProducts] = useState<ProductView[]>([]);
   const [search, setSearch] = useState('');
   const [isEditing, setIsEditing] = useState<any>(null);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<ProductView | null>(null);
+  const [alertInfo, setAlertInfo] = useState<any>(null);
 
   const loadData = () => BackendAPI.getStoreProducts(reqContext).then(setProducts);
   useEffect(() => { loadData(); }, []);
@@ -695,37 +771,67 @@ function InventoryView() {
       await BackendAPI.saveProduct(reqContext, data);
       await loadData();
       setIsEditing(null);
-    } catch (e:any) { alert(e.message); }
+      setAlertInfo({ title: 'Éxito', message: 'El producto se guardó correctamente.' });
+    } catch (e:any) { 
+      setAlertInfo({ title: 'Error', message: e.message });
+    }
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      await BackendAPI.deleteProduct(reqContext, confirmDelete.id);
+      await loadData();
+      setConfirmDelete(null);
+      setAlertInfo({ title: 'Producto Eliminado', message: 'El producto fue eliminado permanentemente.' });
+    } catch (e:any) {
+      setAlertInfo({ title: 'Error', message: e.message });
+    }
+  };
+
+  const handleBulkSuccess = () => {
+    setShowBulkImport(false);
+    setAlertInfo({ title: 'Inventario Importado', message: 'Los productos se importaron exitosamente.' });
+    loadData();
   };
 
   const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search));
 
   return (
-    <div className="p-8 h-full flex flex-col bg-[#0F1115] relative text-[#E2E8F0]">
+    <div className="p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] relative text-slate-900 dark:text-[#E2E8F0] transition-colors">
+      {confirmDelete && <ConfirmDialog title="Eliminar Producto" message={`¿Estás seguro de que deseas eliminar permanentemente "${confirmDelete.name}"?`} onConfirm={executeDelete} onCancel={() => setConfirmDelete(null)} />}
+      {alertInfo && <AlertDialog title={alertInfo.title} message={alertInfo.message} onClose={() => setAlertInfo(null)} />}
       {isEditing && <ProductFormModal product={isEditing} onClose={() => setIsEditing(null)} onSave={handleSave} />}
+      {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} onSuccess={handleBulkSuccess} />}
       <div className="flex justify-between items-end mb-8">
-        <div><h2 className="text-xl font-bold text-white tracking-tight">Inventario de Catálogo</h2></div>
-        <button onClick={() => setIsEditing({category: 'Abarrotes', stock: 0, minStock: 5})} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors"><Plus size={18}/> Nuevo</button>
+        <div><h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Inventario de Catálogo</h2></div>
+        <div className="flex gap-4">
+          <button onClick={() => setShowBulkImport(true)} className="bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-900 dark:text-white text-sm px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors"><Upload size={18}/> Importar</button>
+          <button onClick={() => setIsEditing({category: 'Abarrotes', stock: 0, minStock: 5})} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors"><Plus size={18}/> Nuevo</button>
+        </div>
       </div>
-      <div className="bg-[#1A1D23] flex-1 rounded-xl shadow-sm border border-[#2D3139] overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-[#2D3139]">
-          <input type="text" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="w-full max-w-md px-4 py-2 bg-[#0F1115] border border-[#2D3139] text-white rounded-lg outline-none focus:border-blue-500 transition-colors"/>
+      <div className="bg-white dark:bg-[#1A1D23] flex-1 rounded-xl shadow-sm border border-slate-200 dark:border-[#2D3139] overflow-hidden flex flex-col transition-colors">
+        <div className="p-4 border-b border-slate-200 dark:border-[#2D3139] transition-colors">
+          <input type="text" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="w-full max-w-md px-4 py-2 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-lg outline-none focus:border-blue-500 transition-colors"/>
         </div>
         <div className="flex-1 overflow-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-white/5 border-b border-[#2D3139] text-slate-400 sticky top-0 uppercase font-bold text-[10px] tracking-widest">
+            <thead className="bg-slate-100 dark:bg-white/5 border-b border-slate-200 dark:border-[#2D3139] text-slate-500 dark:text-slate-400 sticky top-0 uppercase font-bold text-[10px] tracking-widest transition-colors">
               <tr><th className="px-6 py-4">SKU / Código</th><th className="px-6 py-4">Producto</th><th className="px-6 py-4">Precio</th><th className="px-6 py-4 text-center">Stock</th><th className="px-6 py-4 text-center">Acciones</th></tr>
             </thead>
-            <tbody className="divide-y divide-[#2D3139]">
+            <tbody className="divide-y divide-slate-200 dark:divide-[#2D3139] transition-colors">
               {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-white/5 transition-colors text-slate-300">
+                <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-slate-700 dark:text-slate-300">
                   <td className="px-6 py-4 font-mono text-slate-500 text-xs">{p.barcode}</td>
-                  <td className="px-6 py-4 font-medium text-white">{p.name} <span className="text-[10px] text-slate-500 block">{p.category}</span></td>
-                  <td className="px-6 py-4 font-mono text-blue-400">{formatCurrency(p.price)}</td>
+                  <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">{p.name} <span className="text-[10px] text-slate-500 block">{p.category}</span></td>
+                  <td className="px-6 py-4 font-mono text-blue-600 dark:text-blue-400">{formatCurrency(p.price)}</td>
                   <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded text-[10px] font-bold border ${p.stock <= p.minStock ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-white/5 text-slate-400 border-white/10'}`}>{p.stock}</span>
+                    <span className={`px-2 py-1 rounded text-[10px] font-bold border ${p.stock <= p.minStock ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-500/20' : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10'}`}>{p.stock}</span>
                   </td>
-                  <td className="px-6 py-4 text-center text-slate-400"><button onClick={() => setIsEditing(p)} className="p-2 hover:text-blue-400 transition-colors"><Edit size={16}/></button></td>
+                  <td className="px-6 py-4 text-center text-slate-400">
+                    <button onClick={() => setIsEditing(p)} className="p-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><Edit size={16}/></button>
+                    <button onClick={() => setConfirmDelete(p)} className="p-2 hover:text-red-600 dark:hover:text-red-400 transition-colors"><Trash2 size={16}/></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -745,23 +851,133 @@ function ProductFormModal({ product, onClose, onSave }: any) {
     setLoading(false);
   }
   return (
-    <div className="fixed inset-0 bg-[#0F1115]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <form onSubmit={submit} className="bg-[#1A1D23] border border-[#2D3139] rounded-2xl w-full max-w-xl p-6 text-[#E2E8F0]">
-        <h2 className="text-xl font-bold text-white tracking-tight mb-4">{product.id ? 'Editar' : 'Nuevo'} Producto</h2>
+    <div className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <form onSubmit={submit} className="bg-white dark:bg-[#1A1D23] border border-slate-200 dark:border-[#2D3139] rounded-2xl w-full max-w-xl p-6 text-slate-900 dark:text-[#E2E8F0] transition-colors">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">{product.id ? 'Editar' : 'Nuevo'} Producto</h2>
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <input required placeholder="Código" value={data.barcode||''} onChange={e=>setData({...data, barcode: e.target.value})} className="p-3 bg-[#0F1115] border border-[#2D3139] text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
-          <input required placeholder="Categoría" value={data.category||''} onChange={e=>setData({...data, category: e.target.value})} className="p-3 bg-[#0F1115] border border-[#2D3139] text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
-          <input required placeholder="Nombre" value={data.name||''} onChange={e=>setData({...data, name: e.target.value})} className="col-span-2 p-3 bg-[#0F1115] border border-[#2D3139] text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
-          <input required type="number" step="0.01" placeholder="Costo" value={data.cost||''} onChange={e=>setData({...data, cost: e.target.value})} className="p-3 bg-[#0F1115] border border-[#2D3139] text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
-          <input required type="number" step="0.01" placeholder="Precio" value={data.price||''} onChange={e=>setData({...data, price: e.target.value})} className="p-3 bg-[#0F1115] border border-[#2D3139] text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
-          <input required type="number" placeholder="Stock" value={data.stock||0} onChange={e=>setData({...data, stock: e.target.value})} className="p-3 bg-[#0F1115] border border-[#2D3139] text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
-          <input required type="number" placeholder="Min Stock" value={data.minStock||0} onChange={e=>setData({...data, minStock: e.target.value})} className="p-3 bg-[#0F1115] border border-[#2D3139] text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
+          <input required placeholder="Código (ej. 12345)" value={data.barcode||''} onChange={e=>setData({...data, barcode: e.target.value})} className="p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
+          <input required placeholder="Categoría (ej. General)" value={data.category||''} onChange={e=>setData({...data, category: e.target.value})} className="p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
+          <input required placeholder="Nombre ('producto')" value={data.name||''} onChange={e=>setData({...data, name: e.target.value})} className="col-span-2 p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
+          <input required type="number" step="0.01" placeholder="Costo proveedor" value={data.cost||''} onChange={e=>setData({...data, cost: e.target.value})} className="p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
+          <input required type="number" step="0.01" placeholder="Venta publico" value={data.price||''} onChange={e=>setData({...data, price: e.target.value})} className="p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
+          <input required type="number" placeholder="Items (Stock)" value={data.stock||0} onChange={e=>setData({...data, stock: e.target.value})} className="p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
+          <input required type="number" placeholder="Min Stock" value={data.minStock||0} onChange={e=>setData({...data, minStock: e.target.value})} className="p-3 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-xl focus:border-blue-500 outline-none transition-colors" />
         </div>
         <div className="flex gap-4">
-          <button type="button" onClick={onClose} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-colors">Cancelar</button>
-          <button type="submit" disabled={loading} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-white/5 disabled:text-slate-600 text-white rounded-xl font-bold transition-colors">Guardar</button>
+          <button type="button" onClick={onClose} className="flex-1 py-3 bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-800 dark:text-white rounded-xl font-bold transition-colors">Cancelar</button>
+          <button type="submit" disabled={loading} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 dark:disabled:bg-white/5 disabled:text-slate-400 dark:disabled:text-slate-600 text-white rounded-xl font-bold transition-colors">Guardar</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function BulkImportModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
+  const { reqContext } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmData, setConfirmData] = useState<any[] | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError(null);
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        
+        // Convert array of arrays or json
+        const data = XLSX.utils.sheet_to_json(ws);
+        
+        if (!data || data.length === 0) {
+          throw new Error("El archivo está vacío o no se pudo leer correctamente.");
+        }
+
+        const formattedProducts = data.map((row: any, index: number) => {
+          // Attempt to match the headers from the image, but be forgiving
+          const name = row['producto'] || row['Producto'] || row['Name'] || '';
+          const cost = Number(row['Costo proveedor'] || row['Costo'] || row['cost'] || 0);
+          const price = Number(row['Venta publico'] || row['Precio'] || row['price'] || 0);
+          const stock = Number(row['Items'] || row['Stock'] || row['stock'] || 0);
+
+          if (!name) throw new Error(`Fila ${index + 1}: El nombre del producto es obligatorio. Asegúrate de tener una columna llamada "producto"`);
+
+          return {
+            name,
+            cost,
+            price,
+            stock,
+            minStock: 5, // Default
+            category: 'General', // Default
+            barcode: Math.floor(100000000 + Math.random() * 900000000).toString(), // Auto-generate 9 digit barcode
+          };
+        });
+
+        setConfirmData(formattedProducts);
+      } catch (err: any) {
+        setError(err.message || "Error al procesar el archivo Excel.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const processImport = async () => {
+    if (!confirmData) return;
+    try {
+      setLoading(true);
+      await BackendAPI.saveProductsBulk(reqContext, confirmData);
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || "Error al procesar el archivo Excel.");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      {confirmData && (
+        <ConfirmDialog 
+          title="Confirmar Importación" 
+          message={`¿Estás seguro de importar ${confirmData.length} productos a este catálogo?`} 
+          onConfirm={processImport} 
+          onCancel={() => setConfirmData(null)} 
+        />
+      )}
+      <div className="bg-white dark:bg-[#1A1D23] border border-slate-200 dark:border-[#2D3139] rounded-2xl w-full max-w-md p-6 text-slate-900 dark:text-[#E2E8F0] transition-colors">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">Importar Inventario</h2>
+        <p className="text-sm text-slate-500 mb-6">Sube un archivo .xlsx o .csv con las columnas: <br/><strong className="text-slate-900 dark:text-white">producto, Costo proveedor, Venta publico, Items</strong>.</p>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-sm font-bold flex items-start gap-2">
+            <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+            <p>{error}</p>
+          </div>
+        )}
+
+        <div className="mb-6">
+          <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${loading ? 'opacity-50 cursor-not-allowed border-slate-300 dark:border-[#2D3139]' : 'border-blue-300 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/5 bg-slate-50 dark:bg-[#0F1115]'}`}>
+            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+              <Upload className="w-8 h-8 mb-3 text-blue-500" />
+              <p className="mb-2 text-sm text-slate-500 dark:text-slate-400 font-bold">{loading ? 'Procesando...' : 'Haz clic para seleccionar archivo'}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">XLSX, XLS, CSV</p>
+            </div>
+            <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} disabled={loading} />
+          </label>
+        </div>
+
+        <div className="flex gap-4">
+          <button type="button" onClick={onClose} disabled={loading} className="w-full py-3 bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-800 dark:text-white rounded-xl font-bold transition-colors">Cerrar</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -786,8 +1002,8 @@ function DashboardView() {
   const iv = products.reduce((sum, p) => sum + (p.cost * p.stock), 0);
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-[#0F1115] text-[#E2E8F0] flex flex-col gap-6">
-      <h2 className="text-xl font-bold tracking-tight text-white">Dashboard Múlti-tenant</h2>
+    <div className="p-8 h-full overflow-y-auto bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] flex flex-col gap-6 transition-colors">
+      <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Dashboard Múlti-tenant</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <StatCard title="Ingresos (Store)" value={formatCurrency(totalRevenue)} icon={<Banknote size={20}/>} color="bg-blue-500" />
@@ -796,7 +1012,7 @@ function DashboardView() {
         <StatCard title="Ventas Totales" value={sales.length} icon={<Receipt size={20}/>} color="bg-amber-500" />
       </div>
 
-      <div className="mt-2 flex items-center justify-center p-4 border border-dashed border-[#2D3139] rounded-xl bg-white/5">
+      <div className="mt-2 flex items-center justify-center p-4 border border-dashed border-slate-300 dark:border-[#2D3139] rounded-xl bg-slate-100 dark:bg-white/5 transition-colors">
         <span className="text-xs text-slate-500 uppercase tracking-widest font-bold">Resumen General Actualizado Automáticamente</span>
       </div>
     </div>
@@ -809,21 +1025,21 @@ function SalesView() {
   useEffect(() => { BackendAPI.getSales({ tenantId: reqContext.tenantId, storeId: reqContext.storeId }).then(setSales); }, [reqContext]);
 
   return (
-    <div className="p-8 h-full flex flex-col bg-[#0F1115] text-[#E2E8F0] gap-6">
-      <h2 className="text-xl font-bold tracking-tight text-white">Registro de Ventas</h2>
-      <div className="bg-[#1A1D23] flex-1 rounded-xl shadow-sm border border-[#2D3139] overflow-hidden">
+    <div className="p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] gap-6 transition-colors">
+      <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Registro de Ventas</h2>
+      <div className="bg-white dark:bg-[#1A1D23] flex-1 rounded-xl shadow-sm border border-slate-200 dark:border-[#2D3139] overflow-hidden transition-colors">
         <table className="w-full text-left text-sm">
-          <thead className="bg-white/5 border-b border-[#2D3139] uppercase text-[10px] tracking-widest text-slate-400">
+          <thead className="bg-slate-100 dark:bg-white/5 border-b border-slate-200 dark:border-[#2D3139] uppercase text-[10px] tracking-widest text-slate-500 dark:text-slate-400 transition-colors">
             <tr><th className="px-6 py-4">ID Transacción</th><th className="px-6 py-4">Fecha</th><th className="px-6 py-4">Método</th><th className="px-6 py-4">Total</th><th className="px-6 py-4 text-center">Items</th></tr>
           </thead>
-          <tbody className="divide-y divide-[#2D3139]">
+          <tbody className="divide-y divide-slate-200 dark:divide-[#2D3139] transition-colors">
             {sales.map(s => (
-              <tr key={s.id} className="hover:bg-white/5 transition-colors text-slate-300">
+              <tr key={s.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-slate-700 dark:text-slate-300">
                 <td className="px-6 py-4 font-mono text-slate-500 text-xs">{s.id}</td>
-                <td className="px-6 py-4 text-slate-400">{new Date(s.datetime).toLocaleString()}</td>
-                <td className="px-6 py-4"><span className="px-2 py-1 bg-white/5 text-slate-400 text-[10px] font-bold rounded border border-white/10 uppercase">{s.paymentMethod}</span></td>
-                <td className="px-6 py-4 font-mono text-blue-400 font-bold">{formatCurrency(s.total)}</td>
-                <td className="px-6 py-4 text-center text-slate-400">{s.itemsCount}</td>
+                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{new Date(s.datetime).toLocaleString()}</td>
+                <td className="px-6 py-4"><span className="px-2 py-1 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 text-[10px] font-bold rounded border border-slate-200 dark:border-white/10 uppercase transition-colors">{s.paymentMethod}</span></td>
+                <td className="px-6 py-4 font-mono text-blue-600 dark:text-blue-400 font-bold">{formatCurrency(s.total)}</td>
+                <td className="px-6 py-4 text-center text-slate-500 dark:text-slate-400">{s.itemsCount}</td>
               </tr>
             ))}
           </tbody>
@@ -839,18 +1055,18 @@ function MovementsView() {
   useEffect(() => { BackendAPI.getStockMovements({ tenantId: reqContext.tenantId, storeId: reqContext.storeId }).then(setMoves); }, [reqContext]);
   
   return (
-    <div className="p-8 h-full flex flex-col bg-[#0F1115] text-[#E2E8F0] gap-6">
-      <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">Auditoría <span className="text-xs font-normal text-slate-500">• Store Movements</span></h2>
-      <div className="bg-[#111419] flex-1 rounded-xl shadow-sm border border-[#2D3139] p-4 flex flex-col gap-4 overflow-y-auto">
+    <div className="p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] gap-6 transition-colors">
+      <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">Auditoría <span className="text-xs font-normal text-slate-500">• Store Movements</span></h2>
+      <div className="bg-white dark:bg-[#111419] flex-1 rounded-xl shadow-sm border border-slate-200 dark:border-[#2D3139] p-4 flex flex-col gap-4 overflow-y-auto transition-colors">
         {moves.map(m => (
           <div key={m.id} className="flex gap-4 group">
             <div className={`w-1 rounded-full ${m.quantity > 0 ? 'bg-blue-500' : 'bg-red-500'}`}></div>
-            <div className="flex-1">
+            <div className="flex-1 border-b border-slate-100 dark:border-[#1A1D23] pb-3">
               <div className="text-xs font-bold uppercase text-slate-500 tracking-tight">{m.type} • {m.productName}</div>
-              <div className="text-sm text-slate-300">
-                Quantity adjusted by <span className={m.quantity > 0 ? 'text-blue-400' : 'text-red-400'}>{m.quantity > 0 ? '+' : ''}{m.quantity}</span> units
+              <div className="text-sm text-slate-700 dark:text-slate-300 transition-colors">
+                Quantity adjusted by <span className={m.quantity > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500 dark:text-red-400'}>{m.quantity > 0 ? '+' : ''}{m.quantity}</span> units
               </div>
-              <div className="text-[10px] text-slate-600 font-medium mt-1">By user: {m.userName} • {new Date(m.date).toLocaleString()} • {m.reason}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mt-1">By user: {m.userName} • {new Date(m.date).toLocaleString()} • {m.reason}</div>
             </div>
           </div>
         ))}
@@ -863,9 +1079,38 @@ function MovementsView() {
 // ============================================================================
 // COMPONENTES COMUNES
 // ============================================================================
+
+function ConfirmDialog({ title, message, onConfirm, onCancel }: { title: string, message: string, onConfirm: () => void, onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-[#1A1D23] border border-slate-200 dark:border-[#2D3139] p-6 rounded-2xl w-full max-w-sm text-slate-900 dark:text-[#E2E8F0] shadow-xl transition-colors">
+        <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">{title}</h3>
+        <p className="text-slate-500 mb-6">{message}</p>
+        <div className="flex gap-4">
+          <button onClick={onCancel} className="flex-1 py-3 bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-800 dark:text-white rounded-xl font-bold transition-colors">Cancelar</button>
+          <button onClick={onConfirm} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AlertDialog({ title, message, onClose }: { title: string, message: string, onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-[#1A1D23] border border-slate-200 dark:border-[#2D3139] p-6 rounded-2xl w-full max-w-sm text-slate-900 dark:text-[#E2E8F0] shadow-xl text-center transition-colors">
+        <div className="flex justify-center mb-4 text-emerald-500"><CheckCircle2 size={48} /></div>
+        <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white_">{title}</h3>
+        <p className="text-slate-500 mb-6">{message}</p>
+        <button onClick={onClose} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors">Aceptar</button>
+      </div>
+    </div>
+  );
+}
+
 function NavItem({ icon, label, active, onClick }: any) {
   return (
-    <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm transition-all ${active ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20 shadow-none' : 'text-slate-400 hover:bg-white/5 border border-transparent'}`}>
+    <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm transition-all ${active ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-600/20 shadow-none' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/5 border border-transparent'}`}>
       {icon} {label}
     </button>
   );
@@ -873,13 +1118,22 @@ function NavItem({ icon, label, active, onClick }: any) {
 
 function StatCard({ icon, title, value, color }: any) {
   return (
-    <div className="bg-[#1A1D23] p-5 border border-[#2D3139] rounded-xl flex flex-col justify-between">
+    <div className="bg-white dark:bg-[#1A1D23] p-5 border border-slate-200 dark:border-[#2D3139] rounded-xl flex flex-col justify-between transition-colors">
       <div className={`text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1 flex items-center justify-between`}>
         {title}
-        <div className={`p-1.5 rounded-lg bg-black/20 text-blue-400`}>{icon}</div>
+        <div className={`p-1.5 rounded-lg bg-slate-100 dark:bg-black/20 text-blue-600 dark:text-blue-400`}>{icon}</div>
       </div>
-      <h4 className="text-2xl font-mono text-white tracking-tight">{value}</h4>
+      <h4 className="text-2xl font-mono text-slate-900 dark:text-white tracking-tight">{value}</h4>
     </div>
+  );
+}
+
+function ThemeToggle() {
+  const theme = useAppTheme();
+  return (
+    <button onClick={theme.toggleTheme} className="px-4 py-3 rounded-lg bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-600 dark:text-slate-400 transition-colors">
+      {theme.isDark ? <Sun size={20}/> : <Moon size={20}/>}
+    </button>
   );
 }
 
