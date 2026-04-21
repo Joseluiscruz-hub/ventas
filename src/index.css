@@ -1,2 +1,47 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
+
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: white !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+.ticket-top {
+  position: relative;
+  background: white;
+}
+
+.ticket-top::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background-size: 20px 20px;
+  background-repeat: repeat-x;
+  background-image: radial-gradient(circle at 10px 0px, transparent 10px, white 10.5px);
+}
+
+.ticket-bottom {
+  position: relative;
+  background: white;
+}
+
+.ticket-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background-size: 20px 20px;
+  background-repeat: repeat-x;
+  background-image: radial-gradient(circle at 10px 10px, transparent 10px, white 10.5px);
+}

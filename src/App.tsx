@@ -4,7 +4,8 @@ import {
   ShoppingCart, LayoutDashboard, PackageSearch, Receipt, LogOut, 
   Plus, Search, Trash2, Edit, Barcode, CreditCard, Banknote,
   TrendingUp, AlertCircle, CheckCircle2, Lock, UserCog, ShieldCheck,
-  History, Save, X, Store as StoreIcon, Sun, Moon, Upload
+  History, Save, X, Store as StoreIcon, Sun, Moon, Upload, Menu,
+  Printer, QrCode
 } from 'lucide-react';
 
 // ============================================================================
@@ -447,22 +448,43 @@ export default function App() {
 function MainLayout() {
   const { user, tenant, store, logout, hasPermission } = useAuth();
   const [currentView, setCurrentView] = useState<'pos' | 'dashboard' | 'inventory' | 'sales' | 'movements'>('pos');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const auditEnabled = hasFeature(tenant, 'AUDIT');
 
+  const navItemClick = (view: any) => {
+    setCurrentView(view);
+    setIsSidebarOpen(false);
+  };
+
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-[#0F1115] font-sans text-slate-900 dark:text-[#E2E8F0] overflow-hidden transition-colors">
-      <aside className="w-64 bg-slate-100 dark:bg-[#111419] border-r border-slate-200 dark:border-[#2D3139] flex flex-col transition-all duration-300">
-        <div className="p-6 flex items-center gap-3 border-b border-slate-200 dark:border-[#2D3139] bg-white dark:bg-[#16191E]">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg border border-blue-600/10 dark:border-white/10 shrink-0">
-            N
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight">NEXUS <span className="font-light text-slate-500 dark:text-slate-400 text-sm italic">v2.0</span></h1>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase font-bold truncate max-w-[120px]">Plan {tenant?.plan}</p>
+    <div className="flex h-screen bg-slate-50 dark:bg-[#0F1115] font-sans text-slate-900 dark:text-[#E2E8F0] overflow-hidden transition-colors relative">
+      
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 lg:w-64 bg-slate-100 dark:bg-[#111419] border-r border-slate-200 dark:border-[#2D3139] flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 flex items-center justify-between border-b border-slate-200 dark:border-[#2D3139] bg-white dark:bg-[#16191E]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg border border-blue-600/10 dark:border-white/10 shrink-0">
+              N
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight">NEXUS <span className="font-light text-slate-500 dark:text-slate-400 text-sm italic">v2.0</span></h1>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase font-bold truncate max-w-[120px]">Plan {tenant?.plan}</p>
+              </div>
             </div>
           </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="p-2 lg:hidden text-slate-500 hover:text-slate-900 dark:hover:text-white">
+            <X size={20} />
+          </button>
         </div>
 
         <div className="px-6 py-4 bg-white dark:bg-[#16191E] border-b border-slate-200 dark:border-[#2D3139] space-y-3 flex justify-between flex-col">
@@ -483,19 +505,19 @@ function MainLayout() {
 
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto flex flex-col gap-1">
           <div className="px-4 py-2 text-[10px] text-slate-400 dark:text-slate-600 uppercase font-bold tracking-[0.2em] mb-1">Operaciones</div>
-          <NavItem icon={<ShoppingCart size={20} />} label="Terminal de Caja" active={currentView === 'pos'} onClick={() => setCurrentView('pos')} />
+          <NavItem icon={<ShoppingCart size={20} />} label="Terminal de Caja" active={currentView === 'pos'} onClick={() => navItemClick('pos')} />
           
           {hasPermission(['ADMIN', 'MANAGER']) && (
             <>
               <div className="px-4 py-2 text-[10px] text-slate-400 dark:text-slate-600 uppercase font-bold tracking-[0.2em] mt-4 mb-1">Management</div>
-              <NavItem icon={<LayoutDashboard size={20} />} label="Panel de Control" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />
-              <NavItem icon={<PackageSearch size={20} />} label="Inventario y Stock" active={currentView === 'inventory'} onClick={() => setCurrentView('inventory')} />
+              <NavItem icon={<LayoutDashboard size={20} />} label="Panel de Control" active={currentView === 'dashboard'} onClick={() => navItemClick('dashboard')} />
+              <NavItem icon={<PackageSearch size={20} />} label="Inventario y Stock" active={currentView === 'inventory'} onClick={() => navItemClick('inventory')} />
               
               {auditEnabled && (
                 <>
                   <div className="px-4 py-2 text-[10px] text-slate-400 dark:text-slate-600 uppercase font-bold tracking-[0.2em] mt-4 mb-1">Auditoría</div>
-                  <NavItem icon={<Receipt size={20} />} label="Registro de Ventas" active={currentView === 'sales'} onClick={() => setCurrentView('sales')} />
-                  <NavItem icon={<History size={20} />} label="Auditoría Movimientos" active={currentView === 'movements'} onClick={() => setCurrentView('movements')} />
+                  <NavItem icon={<Receipt size={20} />} label="Registro de Ventas" active={currentView === 'sales'} onClick={() => navItemClick('sales')} />
+                  <NavItem icon={<History size={20} />} label="Auditoría Movimientos" active={currentView === 'movements'} onClick={() => navItemClick('movements')} />
                 </>
               )}
             </>
@@ -511,12 +533,25 @@ function MainLayout() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-        {currentView === 'pos' && <POSView />}
-        {currentView === 'dashboard' && <DashboardView />}
-        {currentView === 'inventory' && <InventoryView />}
-        {currentView === 'sales' && <SalesView />}
-        {currentView === 'movements' && <MovementsView />}
+      <main className="flex-1 flex flex-col min-w-0 transition-colors bg-white dark:bg-[#0F1115]">
+        {/* Mobile Header */}
+        <div className="lg:hidden flex items-center justify-between p-4 bg-white dark:bg-[#16191E] border-b border-slate-200 dark:border-[#2D3139]">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors">
+              <Menu size={24} />
+            </button>
+            <span className="font-bold tracking-tight text-slate-900 dark:text-white">{store?.name}</span>
+          </div>
+          <ThemeToggle />
+        </div>
+        
+        <div className="flex-1 overflow-hidden relative">
+          {currentView === 'pos' && <POSView />}
+          {currentView === 'dashboard' && <DashboardView />}
+          {currentView === 'inventory' && <InventoryView />}
+          {currentView === 'sales' && <SalesView />}
+          {currentView === 'movements' && <MovementsView />}
+        </div>
       </main>
     </div>
   );
@@ -586,6 +621,7 @@ function POSView() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmSaleInfo, setConfirmSaleInfo] = useState<any>(null);
   const [alertInfo, setAlertInfo] = useState<any>(null);
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   useEffect(() => {
     BackendAPI.getStoreProducts(reqContext).then(setProducts);
@@ -632,7 +668,11 @@ function POSView() {
       setConfirmSaleInfo(null);
       const updated = await BackendAPI.getStoreProducts(reqContext);
       setProducts(updated);
-      setAlertInfo({ title: 'Venta Procesada', message: `La venta se processó correctamente. ID: ${sale.id}` });
+      setAlertInfo({ 
+        title: 'Venta Procesada', 
+        message: `La venta se processó correctamente.`,
+        saleData: sale 
+      });
     } catch (error: any) {
       setAlertInfo({ title: 'Error en la Venta', message: error.message });
       setConfirmSaleInfo(null);
@@ -646,46 +686,76 @@ function POSView() {
   };
 
   return (
-    <div className="flex h-full bg-[#0F1115] relative">
+    <div className="flex h-full bg-[#0F1115] relative overflow-hidden">
       {isProcessing && (
         <div className="absolute inset-0 bg-[#0F1115]/80 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-[#1A1D23] border border-[#2D3139] p-6 rounded-2xl shadow-xl text-blue-400 font-bold">Procesando...</div>
         </div>
       )}
 
-      <div className="flex-1 flex flex-col p-6 h-full overflow-hidden bg-slate-50 dark:bg-[#0F1115] transition-colors">
+      {/* Cart Overlay for Mobile */}
+      {isCartOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm z-30 lg:hidden"
+          onClick={() => setIsCartOpen(false)}
+        />
+      )}
+
+      <div className="flex-1 flex flex-col p-4 lg:p-6 h-full overflow-hidden bg-slate-50 dark:bg-[#0F1115] transition-colors relative">
         {confirmSaleInfo && <ConfirmDialog title="Confirmar Venta" message={`¿Estás seguro de completar esta venta por ${formatCurrency(cartTotal)}?`} onConfirm={executeCheckout} onCancel={() => setConfirmSaleInfo(null)} />}
-        {alertInfo && <AlertDialog title={alertInfo.title} message={alertInfo.message} onClose={() => setAlertInfo(null)} />}
-        <div className="bg-white dark:bg-[#1A1D23] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-[#2D3139] mb-6 flex items-center gap-4 transition-colors">
-          <Barcode size={24} className="text-slate-500" />
+        {alertInfo && !alertInfo.saleData && <AlertDialog title={alertInfo.title} message={alertInfo.message} onClose={() => setAlertInfo(null)} />}
+        {alertInfo?.saleData && <ReceiptModal sale={alertInfo.saleData} onClose={() => setAlertInfo(null)} storeName={reqContext.storeId} />}
+        
+        <div className="bg-white dark:bg-[#1A1D23] p-4 rounded-xl lg:rounded-2xl shadow-sm border border-slate-200 dark:border-[#2D3139] mb-4 lg:mb-6 flex items-center gap-4 transition-colors">
+          <Barcode size={24} className="text-slate-500 hidden sm:block" />
+          <Search size={24} className="text-slate-500 sm:hidden" />
           <input
-            type="text" placeholder="Buscar..." className="flex-1 text-lg outline-none bg-transparent text-slate-900 dark:text-white"
+            type="text" placeholder="Buscar producto o código..." className="flex-1 text-base lg:text-lg outline-none bg-transparent text-slate-900 dark:text-white"
             value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} autoFocus
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-2">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-20">
+        <div className="flex-1 overflow-y-auto pr-1 lg:pr-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4 pb-32">
             {filteredProducts.map(product => (
               <button key={product.id} onClick={() => addToCart(product)} disabled={product.stock <= 0}
-                className={`text-left p-4 rounded-xl border transition-all ${product.stock <= 0 ? 'bg-white dark:bg-[#1A1D23] opacity-50 border-slate-200 dark:border-[#2D3139]' : 'bg-white dark:bg-[#1A1D23] border-slate-200 dark:border-[#2D3139] hover:border-blue-500 dark:hover:border-blue-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}>
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">{product.category}</span>
-                  {product.stock <= product.minStock && product.stock > 0 && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">Stock: {product.stock}</span>}
-                  {product.stock <= 0 && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">Agotado</span>}
+                className={`text-left p-3 lg:p-4 rounded-xl flex flex-col border transition-all ${product.stock <= 0 ? 'bg-white dark:bg-[#1A1D23] opacity-50 border-slate-200 dark:border-[#2D3139]' : 'bg-white dark:bg-[#1A1D23] border-slate-200 dark:border-[#2D3139] hover:border-blue-500 dark:hover:border-blue-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}>
+                <div className="flex justify-between items-start mb-2 w-full">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider truncate mr-1">{product.category}</span>
+                  {product.stock <= product.minStock && product.stock > 0 && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shrink-0">Stock: {product.stock}</span>}
+                  {product.stock <= 0 && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20 shrink-0">Agotado</span>}
                 </div>
-                <h3 className="font-bold text-sm h-10 text-slate-900 dark:text-white">{product.name}</h3>
-                <div className="flex justify-between items-end mt-2">
-                  <span className="text-slate-500 font-mono text-[10px]">{product.barcode}</span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(product.price)}</span>
+                <h3 className="font-bold text-xs lg:text-sm h-10 text-slate-900 dark:text-white line-clamp-2 w-full">{product.name}</h3>
+                <div className="flex justify-between items-end mt-2 w-full">
+                  <span className="text-slate-500 font-mono text-[10px] hidden sm:block">{product.barcode}</span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400 text-sm lg:text-base ml-auto">{formatCurrency(product.price)}</span>
                 </div>
               </button>
             ))}
           </div>
         </div>
+
+        {/* Floating Action Button for Mobile Cart */}
+        {cart.length > 0 && (
+          <div className="lg:hidden absolute bottom-6 inset-x-4">
+            <button onClick={() => setIsCartOpen(true)} className="w-full bg-blue-600 text-white font-bold p-4 rounded-2xl shadow-xl flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={20} />
+                <span>Ver Carrito ({cart.reduce((s, i) => s + i.quantity, 0)})</span>
+              </div>
+              <span className="text-lg">{formatCurrency(cartTotal)}</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="w-96 bg-slate-100 dark:bg-[#111419] border-l border-slate-200 dark:border-[#2D3139] flex flex-col shadow-2xl z-10 transition-colors">
+      <div className={`fixed inset-y-0 right-0 z-40 w-full sm:w-96 lg:static bg-slate-100 dark:bg-[#111419] border-l border-slate-200 dark:border-[#2D3139] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out lg:translate-x-0 ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="lg:hidden p-4 bg-white dark:bg-[#1A1D23] border-b border-slate-200 dark:border-[#2D3139] flex items-center justify-between">
+          <h2 className="font-bold text-lg text-slate-900 dark:text-white">Carrito de Compra</h2>
+          <button onClick={() => setIsCartOpen(false)} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white">
+            <X size={24} />
+          </button>
+        </div>
         <div className="flex-1 p-4 space-y-3 overflow-y-auto">
           {cart.map(item => (
             <div key={item.id} className="flex gap-3 bg-white dark:bg-[#1A1D23] p-3 border border-slate-200 dark:border-[#2D3139] rounded-xl text-slate-900 dark:text-white transition-colors">
@@ -798,25 +868,30 @@ function InventoryView() {
   const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search));
 
   return (
-    <div className="p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] relative text-slate-900 dark:text-[#E2E8F0] transition-colors">
+    <div className="p-4 lg:p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] relative text-slate-900 dark:text-[#E2E8F0] transition-colors">
       {confirmDelete && <ConfirmDialog title="Eliminar Producto" message={`¿Estás seguro de que deseas eliminar permanentemente "${confirmDelete.name}"?`} onConfirm={executeDelete} onCancel={() => setConfirmDelete(null)} />}
       {alertInfo && <AlertDialog title={alertInfo.title} message={alertInfo.message} onClose={() => setAlertInfo(null)} />}
       {isEditing && <ProductFormModal product={isEditing} onClose={() => setIsEditing(null)} onSave={handleSave} />}
       {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} onSuccess={handleBulkSuccess} />}
-      <div className="flex justify-between items-end mb-8">
+      
+      <div className="flex flex-col md:flex-row md:justify-between tracking-tight gap-4 mb-6 lg:mb-8">
         <div><h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Inventario de Catálogo</h2></div>
-        <div className="flex gap-4">
-          <button onClick={() => setShowBulkImport(true)} className="bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-900 dark:text-white text-sm px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors"><Upload size={18}/> Importar</button>
-          <button onClick={() => setIsEditing({category: 'Abarrotes', stock: 0, minStock: 5})} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors"><Plus size={18}/> Nuevo</button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowBulkImport(true)} className="flex-1 md:flex-none justify-center bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-900 dark:text-white text-sm px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-colors"><Upload size={18}/> Importar</button>
+          <button onClick={() => setIsEditing({category: 'Abarrotes', stock: 0, minStock: 5})} className="flex-1 md:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-colors"><Plus size={18}/> Nuevo</button>
         </div>
       </div>
+
       <div className="bg-white dark:bg-[#1A1D23] flex-1 rounded-xl shadow-sm border border-slate-200 dark:border-[#2D3139] overflow-hidden flex flex-col transition-colors">
-        <div className="p-4 border-b border-slate-200 dark:border-[#2D3139] transition-colors">
-          <input type="text" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="w-full max-w-md px-4 py-2 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-lg outline-none focus:border-blue-500 transition-colors"/>
+        <div className="p-3 lg:p-4 border-b border-slate-200 dark:border-[#2D3139] transition-colors">
+          <div className="relative">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input type="text" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-[#0F1115] border border-slate-200 dark:border-[#2D3139] text-slate-900 dark:text-white rounded-lg outline-none focus:border-blue-500 transition-colors"/>
+          </div>
         </div>
         <div className="flex-1 overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-100 dark:bg-white/5 border-b border-slate-200 dark:border-[#2D3139] text-slate-500 dark:text-slate-400 sticky top-0 uppercase font-bold text-[10px] tracking-widest transition-colors">
+          <table className="w-full text-left text-sm whitespace-nowrap min-w-[600px]">
+            <thead className="bg-slate-100 dark:bg-white/5 border-b border-slate-200 dark:border-[#2D3139] text-slate-500 dark:text-slate-400 sticky top-0 uppercase font-bold text-[10px] tracking-widest transition-colors z-10">
               <tr><th className="px-6 py-4">SKU / Código</th><th className="px-6 py-4">Producto</th><th className="px-6 py-4">Precio</th><th className="px-6 py-4 text-center">Stock</th><th className="px-6 py-4 text-center">Acciones</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-[#2D3139] transition-colors">
@@ -826,7 +901,21 @@ function InventoryView() {
                   <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">{p.name} <span className="text-[10px] text-slate-500 block">{p.category}</span></td>
                   <td className="px-6 py-4 font-mono text-blue-600 dark:text-blue-400">{formatCurrency(p.price)}</td>
                   <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded text-[10px] font-bold border ${p.stock <= p.minStock ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-500/20' : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10'}`}>{p.stock}</span>
+                    <div className="flex items-center justify-center">
+                      {p.stock <= 0 ? (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20">
+                          <AlertCircle size={12} strokeWidth={3} /> {p.stock} (Agotado)
+                        </span>
+                      ) : p.stock <= p.minStock ? (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200 dark:border-amber-500/20">
+                          <AlertCircle size={12} strokeWidth={3} /> {p.stock} (Bajo)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded text-[10px] font-bold border bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10">
+                          {p.stock}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-center text-slate-400">
                     <button onClick={() => setIsEditing(p)} className="p-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><Edit size={16}/></button>
@@ -1002,10 +1091,10 @@ function DashboardView() {
   const iv = products.reduce((sum, p) => sum + (p.cost * p.stock), 0);
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] flex flex-col gap-6 transition-colors">
+    <div className="p-4 lg:p-8 h-full overflow-y-auto bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] flex flex-col gap-4 lg:gap-6 transition-colors">
       <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Dashboard Múlti-tenant</h2>
       
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <StatCard title="Ingresos (Store)" value={formatCurrency(totalRevenue)} icon={<Banknote size={20}/>} color="bg-blue-500" />
         <StatCard title="Ganancia Neta" value={formatCurrency(totalProfit)} icon={<TrendingUp size={20}/>} color="bg-emerald-500" />
         <StatCard title="Inventario Value" value={formatCurrency(iv)} icon={<PackageSearch size={20}/>} color="bg-purple-500" />
@@ -1022,15 +1111,18 @@ function DashboardView() {
 function SalesView() {
   const { reqContext } = useAuth();
   const [sales, setSales] = useState<Sale[]>([]);
+  const [selectedReceipt, setSelectedReceipt] = useState<Sale | null>(null);
+
   useEffect(() => { BackendAPI.getSales({ tenantId: reqContext.tenantId, storeId: reqContext.storeId }).then(setSales); }, [reqContext]);
 
   return (
-    <div className="p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] gap-6 transition-colors">
+    <div className="p-4 lg:p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] gap-4 lg:gap-6 transition-colors">
+      {selectedReceipt && <ReceiptModal sale={selectedReceipt} onClose={() => setSelectedReceipt(null)} storeName={reqContext.storeId} />}
       <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Registro de Ventas</h2>
-      <div className="bg-white dark:bg-[#1A1D23] flex-1 rounded-xl shadow-sm border border-slate-200 dark:border-[#2D3139] overflow-hidden transition-colors">
-        <table className="w-full text-left text-sm">
+      <div className="bg-white dark:bg-[#1A1D23] flex-1 rounded-xl shadow-sm border border-slate-200 dark:border-[#2D3139] overflow-auto transition-colors">
+        <table className="w-full text-left text-sm whitespace-nowrap min-w-[600px]">
           <thead className="bg-slate-100 dark:bg-white/5 border-b border-slate-200 dark:border-[#2D3139] uppercase text-[10px] tracking-widest text-slate-500 dark:text-slate-400 transition-colors">
-            <tr><th className="px-6 py-4">ID Transacción</th><th className="px-6 py-4">Fecha</th><th className="px-6 py-4">Método</th><th className="px-6 py-4">Total</th><th className="px-6 py-4 text-center">Items</th></tr>
+            <tr><th className="px-6 py-4">ID Transacción</th><th className="px-6 py-4">Fecha</th><th className="px-6 py-4">Método</th><th className="px-6 py-4">Total</th><th className="px-6 py-4 text-center">Items</th><th className="px-6 py-4 text-center">Recibo</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-[#2D3139] transition-colors">
             {sales.map(s => (
@@ -1040,6 +1132,9 @@ function SalesView() {
                 <td className="px-6 py-4"><span className="px-2 py-1 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 text-[10px] font-bold rounded border border-slate-200 dark:border-white/10 uppercase transition-colors">{s.paymentMethod}</span></td>
                 <td className="px-6 py-4 font-mono text-blue-600 dark:text-blue-400 font-bold">{formatCurrency(s.total)}</td>
                 <td className="px-6 py-4 text-center text-slate-500 dark:text-slate-400">{s.itemsCount}</td>
+                <td className="px-6 py-4 text-center text-slate-400">
+                  <button onClick={() => setSelectedReceipt(s)} className="p-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><Printer size={16}/></button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1055,8 +1150,8 @@ function MovementsView() {
   useEffect(() => { BackendAPI.getStockMovements({ tenantId: reqContext.tenantId, storeId: reqContext.storeId }).then(setMoves); }, [reqContext]);
   
   return (
-    <div className="p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] gap-6 transition-colors">
-      <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">Auditoría <span className="text-xs font-normal text-slate-500">• Store Movements</span></h2>
+    <div className="p-4 lg:p-8 h-full flex flex-col bg-slate-50 dark:bg-[#0F1115] text-slate-900 dark:text-[#E2E8F0] gap-4 lg:gap-6 transition-colors">
+      <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">Auditoría <span className="text-xs font-normal text-slate-500 hidden sm:inline">• Store Movements</span></h2>
       <div className="bg-white dark:bg-[#111419] flex-1 rounded-xl shadow-sm border border-slate-200 dark:border-[#2D3139] p-4 flex flex-col gap-4 overflow-y-auto transition-colors">
         {moves.map(m => (
           <div key={m.id} className="flex gap-4 group">
@@ -1080,6 +1175,81 @@ function MovementsView() {
 // COMPONENTES COMUNES
 // ============================================================================
 
+function ReceiptModal({ sale, storeName, onClose }: any) {
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex flex-col items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-blur-none">
+      <div className="flex gap-4 mb-4 no-print flex-col sm:flex-row w-full sm:w-auto">
+        <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full flex items-center justify-center gap-2 shadow-lg transition-colors"><Printer size={18}/> Imprimir / PDF</button>
+        <button onClick={onClose} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-8 rounded-full flex items-center justify-center gap-2 transition-colors">Cerrar</button>
+      </div>
+      
+      <div className="relative bg-white text-black w-full max-w-sm flex-col overflow-hidden shadow-2xl print:shadow-none print:w-full print:max-w-full">
+         <div className="ticket-top"></div>
+         <div className="p-8 pb-12 flex flex-col items-center relative z-10 bg-white">
+             {/* Header */}
+             <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center mb-4 shadow-sm"><span className="font-bold text-xl">N</span></div>
+             <h2 className="font-black text-2xl tracking-tighter uppercase mb-1">{storeName || 'NEXUS TIE'}</h2>
+             <p className="text-gray-500 text-xs font-mono mb-6 uppercase tracking-widest">Recibo Oficial</p>
+             
+             {/* Dotted separator */}
+             <div className="w-full border-t-2 border-dashed border-gray-300 my-4 relative">
+                <div className="absolute -left-11 top-1/2 -translate-y-1/2 w-6 h-6 bg-[#0F1115] print:bg-white rounded-full"></div>
+                <div className="absolute -right-11 top-1/2 -translate-y-1/2 w-6 h-6 bg-[#0F1115] print:bg-white rounded-full"></div>
+             </div>
+
+             {/* Metadata */}
+             <div className="w-full space-y-3 mb-6 mt-2">
+                <div className="flex justify-between text-xs font-mono text-gray-400">
+                  <span>FECHA</span>
+                  <span className="text-gray-800">{new Date(sale.datetime).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono text-gray-400">
+                  <span>TICKET #</span>
+                  <span className="text-black font-bold">{sale.id.slice(0, 8).toUpperCase()}</span>
+                </div>
+                <div className="flex justify-between text-xs font-mono text-gray-400">
+                  <span>MÉTODO</span>
+                  <span className="text-black font-bold uppercase tracking-wider">{sale.paymentMethod}</span>
+                </div>
+             </div>
+
+             {/* Items */}
+             <div className="w-full">
+                <h3 className="font-bold text-xs uppercase tracking-widest border-b-2 border-black pb-2 mb-3 text-gray-400">Artículos</h3>
+                {sale.items?.map((item: any, i: number) => (
+                  <div key={i} className="flex justify-between text-sm py-1.5 font-medium leading-snug">
+                    <div className="flex flex-col max-w-[70%]">
+                      <span className="text-black">{item.name}</span>
+                      <span className="text-xs text-gray-500 font-mono mt-0.5">{item.quantity} x {formatCurrency(item.price)}</span>
+                    </div>
+                    <span className="text-black font-bold">{formatCurrency(item.quantity * item.price)}</span>
+                  </div>
+                ))}
+             </div>
+
+             {/* Total */}
+             <div className="w-full border-t-2 border-black mt-6 pt-4 flex justify-between items-end">
+                <span className="font-bold text-gray-400 text-sm tracking-widest">TOTAL</span>
+                <span className="font-black text-3xl tracking-tighter text-black">{formatCurrency(sale.total)}</span>
+             </div>
+
+             {/* Footer Barcode */}
+             <div className="mt-10 flex flex-col items-center">
+                <QrCode size={64} strokeWidth={1} className="mb-3 text-black"/>
+                <p className="text-[9px] text-gray-400 font-mono tracking-widest text-center uppercase leading-relaxed">
+                  Gracias por tu compra<br/>
+                  <span className="text-black font-bold mt-1 block">{sale.id}</span>
+                </p>
+             </div>
+         </div>
+         <div className="ticket-bottom"></div>
+      </div>
+    </div>
+  );
+}
+
 function ConfirmDialog({ title, message, onConfirm, onCancel }: { title: string, message: string, onConfirm: () => void, onCancel: () => void }) {
   return (
     <div className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -1100,7 +1270,7 @@ function AlertDialog({ title, message, onClose }: { title: string, message: stri
     <div className="fixed inset-0 bg-slate-900/50 dark:bg-[#0F1115]/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
       <div className="bg-white dark:bg-[#1A1D23] border border-slate-200 dark:border-[#2D3139] p-6 rounded-2xl w-full max-w-sm text-slate-900 dark:text-[#E2E8F0] shadow-xl text-center transition-colors">
         <div className="flex justify-center mb-4 text-emerald-500"><CheckCircle2 size={48} /></div>
-        <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white_">{title}</h3>
+        <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">{title}</h3>
         <p className="text-slate-500 mb-6">{message}</p>
         <button onClick={onClose} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors">Aceptar</button>
       </div>
