@@ -5,7 +5,7 @@ import {
   Plus, Search, Trash2, Edit, Barcode, CreditCard, Banknote,
   TrendingUp, AlertCircle, CheckCircle2, Lock, UserCog, ShieldCheck,
   History, Save, X, Store as StoreIcon, Sun, Moon, Upload, Menu,
-  Printer, QrCode
+  Printer, QrCode, CloudOff, CloudUpload, WifiOff
 } from 'lucide-react';
 
 import {
@@ -35,7 +35,7 @@ function hasFeature(tenant: Tenant | null, feature: Feature) {
 
 let DB = {
   tenants: [
-    { id: 't1', name: 'Mi Empresa SA', plan: 'PRO' } as Tenant
+    { id: 't1', name: 'Mi Empresa SA', plan: 'PREMIUM' } as Tenant
   ],
   stores: [
     { id: 's1', tenantId: 't1', name: 'Sucursal Principal', address: 'Centro' } as Store,
@@ -179,9 +179,11 @@ const BackendAPI = {
     await delay(400);
     
     // 1. Validaciones de stock
-    for (const item of saleData.items) {
-      const sp = DB.storeProducts.find(sp => sp.productId === item.id && sp.storeId === context.storeId && sp.tenantId === context.tenantId);
-      if (!sp || sp.stock < item.quantity) throw new Error(`Stock insuficiente para ${item.name}`);
+    if (!saleData.isOfflineSync) {
+      for (const item of saleData.items) {
+        const sp = DB.storeProducts.find(sp => sp.productId === item.id && sp.storeId === context.storeId && sp.tenantId === context.tenantId);
+        if (!sp || sp.stock < item.quantity) throw new Error(`Stock insuficiente para ${item.name}`);
+      }
     }
 
     const total = saleData.items.reduce((acc, item) => acc + (item.quantity * item.price), 0);
@@ -191,7 +193,7 @@ const BackendAPI = {
       tenantId: context.tenantId,
       storeId: context.storeId,
       cashierId: context.userId,
-      datetime: new Date().toISOString(),
+      datetime: saleData.offlineDate || new Date().toISOString(),
       total,
       paymentMethod: saleData.paymentMethod,
       amountTendered: saleData.amountTendered,
@@ -369,6 +371,87 @@ export default function App() {
 // 5. LAYOUT Y NAVEGACIÓN
 // ============================================================================
 
+function SyncManager() {
+  const { tenant } = useAuth();
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const checkPending = () => {
+    const existingStr = localStorage.getItem('offline_sales') || '[]';
+    const existing = JSON.parse(existingStr);
+    setPendingCount(existing.length);
+  };
+
+  useEffect(() => {
+    checkPending();
+    const handleOnline = () => { setIsOnline(true); checkPending(); };
+    const handleOffline = () => setIsOnline(false);
+    
+    // Polling as a fallback
+    const interval = setInterval(checkPending, 5000);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isOnline && pendingCount > 0 && hasFeature(tenant, 'OFFLINE')) {
+      syncSales();
+    }
+  }, [isOnline, pendingCount, tenant]);
+
+  const syncSales = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const existingStr = localStorage.getItem('offline_sales') || '[]';
+      const existing = JSON.parse(existingStr);
+      
+      const failed = [];
+      for (const record of existing) {
+         try {
+            await BackendAPI.processSale(record.reqContext, record.saleData);
+         } catch (e) {
+            console.error("Error syncing sale:", e);
+            failed.push(record);
+         }
+      }
+      localStorage.setItem('offline_sales', JSON.stringify(failed));
+      setPendingCount(failed.length);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  if (!hasFeature(tenant, 'OFFLINE')) return null;
+
+  if (!isOnline) {
+    return (
+      <div className="bg-amber-500 text-white text-[10px] sm:text-xs font-bold py-1.5 px-4 flex items-center justify-center gap-2 shadow-sm z-50">
+        <WifiOff size={14} className="animate-pulse" /> 
+        <span>Sin conexión. {pendingCount > 0 ? `(${pendingCount} ventas en espera)` : 'Modo Offline Activo.'}</span>
+      </div>
+    );
+  }
+
+  if (isOnline && isSyncing) {
+    return (
+      <div className="bg-blue-600 text-white text-[10px] sm:text-xs font-bold py-1.5 px-4 flex items-center justify-center gap-2 shadow-sm z-50">
+        <CloudUpload size={14} className="animate-pulse" /> 
+        <span>Sincronizando {pendingCount} ventas con el servidor...</span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function MainLayout() {
   const { user, tenant, store, logout, hasPermission } = useAuth();
   const [currentView, setCurrentView] = useState<'pos' | 'dashboard' | 'inventory' | 'sales' | 'movements'>('pos');
@@ -458,6 +541,8 @@ function MainLayout() {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 transition-colors bg-white dark:bg-[#0F1115]">
+        <SyncManager />
+        
         {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between p-4 bg-white dark:bg-[#16191E] border-b border-slate-200 dark:border-[#2D3139]">
           <div className="flex items-center gap-3">
@@ -537,7 +622,20 @@ function LoginScreen() {
 // ============================================================================
 
 function POSView() {
-  const { reqContext } = useAuth();
+  const { reqContext, tenant } = useAuth();
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const [products, setProducts] = useState<ProductView[]>([]);
   const [cart, setCart] = useState<(ProductView & { quantity: number, subtotal: number })[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -582,21 +680,68 @@ function POSView() {
     if (!confirmSaleInfo) return;
     setIsProcessing(true);
     try {
-      const sale = await BackendAPI.processSale(reqContext, {
-        items: cart,
-        paymentMethod: confirmSaleInfo.paymentMethod,
-        amountTendered: confirmSaleInfo.amountTendered
-      });
-      setCart([]);
-      setShowPaymentModal(false);
-      setConfirmSaleInfo(null);
-      const updated = await BackendAPI.getStoreProducts(reqContext);
-      setProducts(updated);
-      setAlertInfo({ 
-        title: 'Venta Procesada', 
-        message: `La venta se processó correctamente.`,
-        saleData: sale 
-      });
+      if (!isOnline && hasFeature(tenant, 'OFFLINE')) {
+        // Guardado local (Offline Mode)
+        const offlineId = `OFF-${Date.now().toString().slice(-6)}`;
+        const offlineSale = {
+          saleId: offlineId,
+          reqContext,
+          saleData: {
+            items: cart,
+            paymentMethod: confirmSaleInfo.paymentMethod,
+            amountTendered: confirmSaleInfo.amountTendered,
+            isOfflineSync: true,
+            offlineDate: new Date().toISOString()
+          }
+        };
+
+        const existingStr = localStorage.getItem('offline_sales') || '[]';
+        const existing = JSON.parse(existingStr);
+        existing.push(offlineSale);
+        localStorage.setItem('offline_sales', JSON.stringify(existing));
+
+        setCart([]);
+        setShowPaymentModal(false);
+        setConfirmSaleInfo(null);
+        
+        // Pseudo Sale for Receipt rendering
+        const pseudoSale: Sale = {
+           id: offlineId,
+           tenantId: reqContext.tenantId,
+           storeId: reqContext.storeId,
+           cashierId: reqContext.userId,
+           datetime: offlineSale.saleData.offlineDate,
+           total: cartTotal,
+           paymentMethod: confirmSaleInfo.paymentMethod,
+           amountTendered: confirmSaleInfo.amountTendered,
+           changeAmount: confirmSaleInfo.amountTendered - cartTotal,
+           items: cart as SaleItemWithName[]
+        };
+
+        setAlertInfo({ 
+          title: 'Venta Registrada (Offline)', 
+          message: `Estás sin conexión. La venta se ha guardado localmente y se sincronizará automáticamente cuando te conectes.`,
+          saleData: pseudoSale
+        });
+      } else if (!isOnline) {
+        throw new Error('No tienes conexión a internet y tu plan actual no soporta Modo Offline.');
+      } else {
+        const sale = await BackendAPI.processSale(reqContext, {
+          items: cart,
+          paymentMethod: confirmSaleInfo.paymentMethod,
+          amountTendered: confirmSaleInfo.amountTendered
+        });
+        setCart([]);
+        setShowPaymentModal(false);
+        setConfirmSaleInfo(null);
+        const updated = await BackendAPI.getStoreProducts(reqContext);
+        setProducts(updated);
+        setAlertInfo({ 
+          title: 'Venta Procesada', 
+          message: `La venta se procesó correctamente.`,
+          saleData: sale 
+        });
+      }
     } catch (error: any) {
       setAlertInfo({ title: 'Error en la Venta', message: error.message });
       setConfirmSaleInfo(null);

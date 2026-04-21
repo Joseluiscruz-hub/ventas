@@ -135,6 +135,8 @@ export interface ProcessSaleInput {
   items: Array<ProductView & { quantity: number }>;
   paymentMethod: PaymentMethod;
   amountTendered: Money;
+  isOfflineSync?: boolean;
+  offlineDate?: string;
 }
 
 export interface LoginInput {
