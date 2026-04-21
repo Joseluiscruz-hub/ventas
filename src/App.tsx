@@ -8,95 +8,18 @@ import {
   Printer, QrCode
 } from 'lucide-react';
 
+import {
+  Id, ISODateString, Money, Role, Plan, PaymentMethod, MovementType, Feature,
+  Tenant, Store, User, Product, StoreProduct, SaleItem, Sale, StockMovement,
+  ProductView, SaleItemWithName, StockMovementView, Session, RequestContext,
+  CreateProductInput, UpdateProductInput, CartItem, ProcessSaleInput, LoginInput, LoginResponse
+} from './types';
+
 // ============================================================================
-// 1. CAPA DE DOMINIO (Modelos y Tipos)
+// 1. UTILIDADES Y CONSTANTES
 // ============================================================================
 
-export type Role = 'ADMIN' | 'MANAGER' | 'CASHIER';
-export type PaymentMethod = 'CASH' | 'CARD';
-export type MovementType = 'SALE' | 'PURCHASE' | 'ADJUSTMENT' | 'TRANSFER';
-
-export interface Tenant {
-  id: string;
-  name: string;
-  plan: 'BASIC' | 'PRO' | 'PREMIUM';
-}
-
-export interface Store {
-  id: string;
-  tenantId: string;
-  name: string;
-  address?: string;
-}
-
-export interface User {
-  id: string;
-  tenantId: string;
-  storeId: string;
-  username: string;
-  name: string;
-  role: Role;
-}
-
-export interface Product {
-  id: string;
-  tenantId: string;
-  barcode: string;
-  name: string;
-  category: string;
-  cost: number;
-  price: number;
-}
-
-export interface StoreProduct {
-  id: string;
-  tenantId: string;
-  storeId: string;
-  productId: string;
-  stock: number;
-  minStock: number;
-}
-
-export interface SaleItem {
-  id: string;
-  saleId: string;
-  productId: string;
-  quantity: number;
-  price: number;
-  cost: number;
-  subtotal: number;
-}
-
-export interface Sale {
-  id: string;
-  tenantId: string;
-  storeId: string;
-  cashierId: string;
-  datetime: string;
-  total: number;
-  paymentMethod: PaymentMethod;
-  amountTendered: number;
-  changeAmount: number;
-  itemsCount?: number;
-  items?: (SaleItem & { name?: string })[];
-}
-
-export interface StockMovement {
-  id: string;
-  tenantId: string;
-  storeId: string;
-  productId: string;
-  userId: string;
-  type: MovementType;
-  quantity: number;
-  date: string;
-  reason?: string;
-}
-
-// Vista combinada para el frontend
-export type ProductView = Product & { stock: number; minStock: number };
-
-function hasFeature(tenant: Tenant | null, feature: 'MULTISTORE' | 'AUDIT' | 'OFFLINE') {
+function hasFeature(tenant: Tenant | null, feature: Feature) {
   if (!tenant) return false;
   const planFeatures = {
     BASIC: ['POS', 'INVENTORY'],
@@ -140,7 +63,7 @@ let DB = {
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 const BackendAPI = {
-  async login(username: string, pin: string): Promise<{ user: User, tenant: Tenant, store: Store, token: string }> {
+  async login(username: string, pin: string): Promise<LoginResponse> {
     await delay(300);
     const user = DB.users.find(u => u.username === username);
     if (user && ((username === 'admin' && pin === '1234') || (username === 'caja1' && pin === '0000'))) {
@@ -151,13 +74,13 @@ const BackendAPI = {
     throw new Error('Credenciales inválidas');
   },
 
-  async deleteProduct(context: { tenantId: string }, productId: string): Promise<void> {
+  async deleteProduct(context: RequestContext, productId: string): Promise<void> {
     await delay(300);
     DB.products = DB.products.filter(p => !(p.id === productId && p.tenantId === context.tenantId));
     DB.storeProducts = DB.storeProducts.filter(sp => !(sp.productId === productId && sp.tenantId === context.tenantId));
   },
 
-  async getStoreProducts(context: { tenantId: string, storeId: string }): Promise<ProductView[]> {
+  async getStoreProducts(context: RequestContext): Promise<ProductView[]> {
     await delay(200);
     const tProducts = DB.products.filter(p => p.tenantId === context.tenantId);
     const sproducts = DB.storeProducts.filter(sp => sp.tenantId === context.tenantId && sp.storeId === context.storeId);
@@ -172,7 +95,7 @@ const BackendAPI = {
     });
   },
 
-  async saveProduct(context: { tenantId: string, storeId: string, userId: string }, productData: Omit<ProductView, 'id' | 'tenantId'> | ProductView): Promise<ProductView> {
+  async saveProduct(context: RequestContext, productData: CreateProductInput | UpdateProductInput): Promise<ProductView> {
     await delay(300);
     const isNew = !('id' in productData) || !productData.id;
     
@@ -244,7 +167,7 @@ const BackendAPI = {
     }
   },
 
-  async saveProductsBulk(context: { tenantId: string, storeId: string, userId: string }, productsData: Array<Omit<ProductView, 'id' | 'tenantId'>>): Promise<void> {
+  async saveProductsBulk(context: RequestContext, productsData: CreateProductInput[]): Promise<void> {
     await delay(500);
     for (const data of productsData) {
       // Small delay per item to avoid blocking entirely or just await the sequential wrapper
@@ -252,7 +175,7 @@ const BackendAPI = {
     }
   },
 
-  async processSale(context: { tenantId: string, storeId: string, userId: string }, saleData: { items: (ProductView & { quantity: number })[], paymentMethod: PaymentMethod, amountTendered: number }): Promise<Sale> {
+  async processSale(context: RequestContext, saleData: ProcessSaleInput): Promise<Sale> {
     await delay(400);
     
     // 1. Validaciones de stock
@@ -308,7 +231,7 @@ const BackendAPI = {
     return newSale;
   },
 
-  async getSales(context: { tenantId: string, storeId?: string }): Promise<Sale[]> {
+  async getSales(context: Pick<RequestContext, 'tenantId'> & Partial<Pick<RequestContext, 'storeId'>>): Promise<Sale[]> {
     await delay(200);
     let s = DB.sales.filter(s => s.tenantId === context.tenantId);
     if (context.storeId) s = s.filter(x => x.storeId === context.storeId);
@@ -323,7 +246,7 @@ const BackendAPI = {
     });
   },
 
-  async getStockMovements(context: { tenantId: string, storeId?: string }): Promise<(StockMovement & { productName: string, userName: string })[]> {
+  async getStockMovements(context: Pick<RequestContext, 'tenantId'> & Partial<Pick<RequestContext, 'storeId'>>): Promise<StockMovementView[]> {
     await delay(200);
     let m = DB.movements.filter(m => m.tenantId === context.tenantId);
     if (context.storeId) m = m.filter(x => x.storeId === context.storeId);
@@ -347,7 +270,7 @@ interface AuthContextType {
   login: (u: string, p: string) => Promise<void>;
   logout: () => void;
   hasPermission: (roles: Role[]) => boolean;
-  reqContext: { tenantId: string, storeId: string, userId: string };
+  reqContext: RequestContext;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -361,6 +284,7 @@ function useAuth() {
 // ============================================================================
 // 3.5 THEME CONTEXT
 // ============================================================================
+
 
 interface ThemeContextType {
   isDark: boolean;
